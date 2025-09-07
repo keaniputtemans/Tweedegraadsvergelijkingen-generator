@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tweedegraads Slotmachine Oefenmachine</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;700&family=Palanquin+Dark:wght@400;700&display=swap" rel="stylesheet">
+<style>
+body {
+  font-family: 'Public Sans', Arial, sans-serif;
+  margin:0; padding:20px;
+  display:flex; flex-direction:column;
+  justify-content:center; align-items:center;
+  min-height:100vh; 
+  background: linear-gradient(135deg, #e0f7fa, #fff9c4);
+  transition: background 1s;
+  overflow-x:hidden;
+}
+.header {
+  font-family: 'Palanquin Dark', sans-serif;
+  color:#3269e6;
+  font-size:1.2em;
+  text-align:center;
+  margin-bottom:20px;
+  line-height:1.5em;
+}
+.equation { font-size:1.5em; margin-top:10px; text-align:center; }
+.slot { 
+  display:inline-block; width:50px; height:60px; border-radius:10px; 
+  background:linear-gradient(145deg, #e0f0ff, #ffffff); 
+  text-align:center; line-height:60px; font-weight:bold; font-size:1.5em; margin:0 5px; 
+  color:#333; box-shadow: 2px 2px 6px rgba(0,0,0,0.2); 
+  transition: transform 0.3s, box-shadow 0.3s, background 0.5s; 
+}
+.slot.positive { color:green; }
+.slot.negative { color:red; }
+.slot.spin { animation: spinAnim 0.5s infinite; }
+.slot.win { animation: glow 0.8s ease-in-out 3; }
+@keyframes spinAnim {
+  0% { transform: rotateX(0deg); box-shadow: 2px 2px 6px rgba(0,0,0,0.2);}
+  50% { transform: rotateX(360deg); box-shadow: 2px 2px 12px rgba(0,0,0,0.4);}
+  100% { transform: rotateX(0deg); box-shadow: 2px 2px 6px rgba(0,0,0,0.2);}
+}
+@keyframes glow {
+  0%,100% { box-shadow: 2px 2px 6px #ffd700; background: #fffbe0; }
+  50% { box-shadow: 2px 2px 20px #ffeb3b; background: #fffacd; }
+}
+button { margin:5px 3px; padding:10px 15px; font-size:1em; cursor:pointer; border:none; border-radius:8px; background:#3269e6; color:white; transition: background 0.3s; }
+button:hover { background:#2551b3; }
+.solution { margin-top:20px; font-weight:bold; color:darkblue; text-align:left; max-width:600px; white-space:pre-line; }
+#inputs, #selectSolutions, #calculator { margin-top:20px; display:none; }
+#calculator input { width:100px; margin-right:5px; padding:5px; font-size:1em; }
+#calculator .calc-buttons { margin-top:5px; display:flex; flex-wrap:wrap; justify-content:center; }
+#calculator .calc-buttons button { flex:1 0 40px; padding:8px; margin:2px; font-size:1em;}
+.confetti-piece {
+  position:fixed;
+  width:8px;
+  height:8px;
+  background-color: red;
+  opacity:0.9;
+  z-index:1000;
+  pointer-events:none;
+  border-radius:50%;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+Hier kan je een willekeurige tweedegraadsvergelijking genereren,<br>
+nadat je de discriminant en het aantal oplossingen moet bepalen.<br>
+Daarna kan je de oplossingen invullen en controleren <br>
+(afronden op 2 cijfers, gebruik punt als komma).
+</div>
+
+<div class="equation">
+  <span class="slot" id="slotA">0</span>x²
+  <span class="slot" id="slotB">0</span>x
+  <span class="slot" id="slotC">0</span> = 0
+</div>
+
+<button onclick="spin()">Draai de slotmachine!</button>
+
+<div id="selectSolutions">
+  <p>Kies hoeveel oplossingen je verwacht voor deze vergelijking:</p>
+  <button onclick="setExpected(0)">0</button>
+  <button onclick="setExpected(1)">1</button>
+  <button onclick="setExpected(2)">2</button>
+</div>
+
+<div id="inputs">
+  <label>x₁: <input type="text" id="x1Input"></label>
+  <label>x₂: <input type="text" id="x2Input"></label>
+  <button onclick="checkAnswers()">Controleer antwoord</button>
+</div>
+
+<div id="calculator">
+  <p>Rekenmachine: <input type="text" id="calcInput"> <button onclick="calcCompute()">=</button> <span id="calcResult"></span></p>
+  <div class="calc-buttons">
+    <button onclick="insertCalc('(')">(</button>
+    <button onclick="insertCalc(')')">)</button>
+    <button onclick="insertCalc('+')">+</button>
+    <button onclick="insertCalc('-')">-</button>
+    <button onclick="insertCalc('*')">*</button>
+    <button onclick="insertCalc('/')">/</button>
+    <button onclick="insertCalc('^')">^</button>
+    <button onclick="insertSqrt()">√</button>
+    <button onclick="insertCalc('Math.round(')">round</button>
+    <button onclick="insertCalc('0')">0</button>
+    <button onclick="insertCalc('1')">1</button>
+    <button onclick="insertCalc('2')">2</button>
+    <button onclick="insertCalc('3')">3</button>
+    <button onclick="insertCalc('4')">4</button>
+    <button onclick="insertCalc('5')">5</button>
+    <button onclick="insertCalc('6')">6</button>
+    <button onclick="insertCalc('7')">7</button>
+    <button onclick="insertCalc('8')">8</button>
+    <button onclick="insertCalc('9')">9</button>
+    <button onclick="insertCalc('.')">.</button>
+  </div>
+</div>
+
+<div class="solution" id="solution"></div>
+
+<script>
+let currentA, currentB, currentC, solutions=[], expectedSolutions=null;
+
+function getRandomInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+function spin(){
+  document.getElementById("solution").textContent="";
+  document.getElementById("inputs").style.display="none";
+  document.getElementById("selectSolutions").style.display="none";
+  document.getElementById("calculator").style.display="none";
+
+  let aFinal = 0, bFinal=0, cFinal=0;
+  do { aFinal = getRandomInt(-5,5); } while(aFinal===0);
+  bFinal = getRandomInt(-10,10);
+  cFinal = getRandomInt(-10,10);
+  currentA=aFinal; currentB=bFinal; currentC=cFinal;
+
+  let slots = ["slotA","slotB","slotC"];
+  let spins = 0; let maxSpins = 20;
+
+  let spinInterval = setInterval(()=>{
+    spins++;
+    for(let i=0;i<3;i++){
+      let val = getRandomInt(i===0?-5: -10,i===0?5:10);
+      let slot = document.getElementById(slots[i]);
+      slot.textContent=val>=0 && i>0 ? '+'+val:val;
+      slot.className='slot spin '+(val>=0?'positive':'negative');
+    }
+    if(spins>=maxSpins){
+      clearInterval(spinInterval);
+      let finalValues = [currentA,currentB,currentC];
+      for(let i=0;i<3;i++){
+        let slot = document.getElementById(slots[i]);
+        let val = finalValues[i];
+        slot.textContent=val>=0 && i>0 ? '+'+val:val;
+        slot.className='slot '+(val>=0?'positive':'negative');
+        slot.style.transform='rotateX(0deg)';
+      }
+      document.getElementById("selectSolutions").style.display="block";
+      calculateSolutions();
+    }
+  },50);
+}
+
+function calculateSolutions(){
+  let D = currentB*currentB -4*currentA*currentC;
+  solutions=[];
+  if(D>=0){
+    let x1=(-currentB+Math.sqrt(D))/(2*currentA);
+    let x2=(-currentB-Math.sqrt(D))/(2*currentA);
+    solutions=D===0?[x1]:[x1,x2];
+  }
+}
+
+function setExpected(n){
+  expectedSolutions=n;
+  document.getElementById("selectSolutions").style.display="none";
+  if(n>0){ 
+    document.getElementById("inputs").style.display="block"; 
+    document.getElementById("calculator").style.display="block";
+  }
+  else{ 
+    document.getElementById("solution").textContent="Geen reële oplossingen.\nStap voor stap zie je dat D<0."; 
+  }
+}
+
+function parseInput(input){
+  input=input.replace(/\s+/g,'');
+  if(input.includes('/')){
+    let parts=input.split('/');
+    return parseFloat(parts[0])/parseFloat(parts[1]);
+  } else return parseFloat(input);
+}
+
+function checkAnswers(){
+  if(expectedSolutions===0){ alert("Geen oplossingen te controleren."); return; }
+  if(solutions.length===0){ alert("Deze vergelijking heeft geen reële oplossingen."); return; }
+
+  let x1User=parseInput(document.getElementById("x1Input").value);
+  let x2User=parseInput(document.getElementById("x2Input").value);
+
+  let correct=true;
+  if(solutions.length===1) correct = Math.abs(x1User - solutions[0])<0.01;
+  else correct = (Math.abs(x1User-solutions[0])<0.01 && Math.abs(x2User-solutions[1])<0.01) ||
+                (Math.abs(x1User-solutions[1])<0.01 && Math.abs(x2User-solutions[0])<0.01);
+
+  let resultText=correct?"✅ Correct!":"❌ Niet correct.";
+
+  let D = currentB*currentB - 4*currentA*currentC;
+  resultText+=`\n\nStap voor stap oplossing:\n`;
+  resultText+=`1️⃣ Bereken discriminant: D = b² - 4ac\n`;
+  resultText+=`Invullen: D = (${currentB})² - 4*(${currentA})*(${currentC})\n`;
+  resultText+=`Berekening: D = ${D}\n`;
+
+  if(D<0){ resultText+=`D < 0 → geen reële oplossingen.`;}
+  else if(D===0){ 
+    let x=-currentB/(2*currentA); 
+    resultText+=`D = 0 → 1 dubbele oplossing:\n`;
+    resultText+=`x = -b/(2a) = -(${currentB})/(2*${currentA}) = ${x.toFixed(2)}\n`;
+    resultText+=`Oplossingsverzameling: V = {${x.toFixed(2)}}`;
+  }
+  else{ 
+    let x1=(-currentB+Math.sqrt(D))/(2*currentA); 
+    let x2=(-currentB-Math.sqrt(D))/(2*currentA);
+    resultText+=`D > 0 → 2 oplossingen:\n`;
+    resultText+=`x₁ = (-b + √D)/(2a) = (-(${currentB}) + √${D})/(2*${currentA}) = ${x1.toFixed(2)}\n`;
+    resultText+=`x₂ = (-b - √D)/(2a) = (-(${currentB}) - √${D})/(2*${currentA}) = ${x2.toFixed(2)}\n`;
+    resultText+=`Oplossingsverzameling: V = {${x1.toFixed(2)}, ${x2.toFixed(2)}}`;
+  }
+
+  document.getElementById("solution").textContent=resultText;
+
+  if(correct) triggerConfetti();
+}
+
+function calcCompute(){
+  let input = document.getElementById("calcInput").value;
+  try{
+    input = input.replace(/\^/g,'**');
+    let res = eval(input);
+    document.getElementById("calcResult").textContent = res;
+  } catch(e){
+    document.getElementById("calcResult").textContent = "Fout";
+  }
+}
+
+function insertCalc(val){
+  document.getElementById("calcInput").value += val;
+  document.getElementById("calcInput").focus();
+}
+
+function insertSqrt(){
+  document.getElementById("calcInput").value += "Math.sqrt(";
+  document.getElementById("calcInput").focus();
+}
+
+// Confetti effect
+function triggerConfetti(){
+  const colors = ['#ff0','#f00','#0f0','#0ff','#00f','#f0f','#fa0','#0af'];
+  for(let i=0;i<100;i++){
+    let confetti = document.createElement('div');
+    confetti.className='confetti-piece';
+    confetti.style.backgroundColor = colors[Math.floor(Math.random()*colors.length)];
+    confetti.style.left = Math.random()*window.innerWidth + 'px';
+    confetti.style.top = '-10px';
+    confetti.style.width = confetti.style.height = Math.random()*8 + 4 + 'px';
+    document.body.appendChild(confetti);
+    let fall = setInterval(()=>{
+      let top = parseFloat(confetti.style.top);
+      if(top>window.innerHeight){
+        confetti.remove();
+        clearInterval(fall);
+      } else {
+        confetti.style.top = top + 4 + 'px';
+        confetti.style.transform = `rotate(${Math.random()*360}deg)`;
+      }
+    },16);
+  }
+  // pulse slots
+  ['slotA','slotB','slotC'].forEach(id=>{
+    let s = document.getElementById(id);
+    s.classList.add('win');
+    setTimeout(()=>{ s.classList.remove('win'); },2500);
+  });
+}
+</script>
+</body>
+</html>
+
+
